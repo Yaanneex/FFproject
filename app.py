@@ -14,17 +14,15 @@ from loader import show_loader
 # Configuration de la page
 st.set_page_config(
     page_title="Prédiction du Risque d'Incendie en Californie",
-    page_icon="🔥",
+    page_icon="image/fire.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+if "loader_shown" not in st.session_state:
+    show_loader()
+    st.session_state["loader_shown"] = True
 
-
-show_loader()  # Appelle le loader
-st.title("Système de Prévision du Risque d'Incendie de Forêt")
-
-# Configuration
 API_KEY = "3Z6VAUSKV99E8X6SYVGD4VJGL"
 API_BASE = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
 CALIFORNIA_CENTER = (37.5, -119.5)
@@ -110,13 +108,6 @@ st.markdown("""
     margin-bottom: 1.2rem !important;
 }
 </style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div style="text-align:center; margin-bottom:2rem;">
-    <span style="font-size:2.5rem; font-weight:700; color:#FF9800;">🔥</span>
-    <span style="font-size:2.2rem; font-weight:700; color:#fff;">Prévision Risque Incendie Californie</span>
-</div>
 """, unsafe_allow_html=True)
 
 # Fonctions pour le chargement et le traitement des données
@@ -337,163 +328,212 @@ def main():
     st.sidebar.info("""
     **À propos**
 
-    Cette application utilise un modèle d'apprentissage automatique pour prédire le risque d'incendie de forêt en Californie.
-    Sources de données:
-    - Météo: Visual Crossing API
-    - Données géographiques: California Open Data
-    - Indices de végétation: Simulés (NDVI/EVI)
+    Cette application affiche et prédit le risque d'incendie de forêt en Californie, comté par comté, à partir de données météorologiques et environnementales récentes.
     """)
 
-    # ===== CONTENU PRINCIPAL =====
-    st.markdown('<h1 class="main-header">Système de Prévision du Risque d\'Incendie de Forêt</h1>', unsafe_allow_html=True)
+    # Choix de la page (doit être AVANT tout if page == ...)
+    page = st.sidebar.radio(
+        "Navigation",
+        ("Prédiction régionale", "Prédiction personnalisée"),
+        index=0
+    )
 
-    # Récupérer les données météo
-    location = "california" if selected_county == "Tous les comtés" else selected_county.lower().replace(" ", "")
-    with st.spinner("Récupération des données météorologiques..."):
-        weather_data = get_weather_data(location)
-
-    if not weather_data:
-        st.error("Impossible de récupérer les données météorologiques. Veuillez réessayer plus tard.")
-        return
-
-    # Préparer les données pour les comtés
-    counties_data = pd.DataFrame({
-        'name': list(CALIFORNIA_COUNTIES.keys()) if selected_county == "Tous les comtés" else [selected_county]
-    })
-
-    # Calculer le risque d'incendie pour chaque comté
-    counties_data['fire_risk'] = 0
-    day_diff = (selected_date - today).days
-    day_data = weather_data['days'][min(day_diff, len(weather_data['days']) - 1)]
-
-    for idx, row in counties_data.iterrows():
-        county_name = row['name']
-        ndvi = get_ndvi_data(county_name)
-        elevation = get_elevation_data(county_name)
-        risk = calculate_fire_risk(day_data, ndvi, elevation)
-        counties_data.at[idx, 'fire_risk'] = risk
-
-    # === 1. INDICATEURS CLÉS ===
-    st.markdown('<h2 class="sub-header">🌡️ Indicateurs Clés</h2>', unsafe_allow_html=True)
-    col_temp, col_humid, col_wind = st.columns(3)
-    temp_c = round((day_data['temp'] - 32) * 5 / 9, 1) if day_data.get('temp') not in [None, 'N/A'] else 'N/A'
-    with col_temp:
-        st.markdown(f"""
-        <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
-            <div style="font-size:1.2rem; color:#FF9800;">🌡️ Température</div>
-            <div style="font-size:2rem; font-weight:bold;">{temp_c}°C</div>
+    if page == "Prédiction régionale":
+        st.markdown("""
+        <div style="text-align:center; margin-bottom:2rem;">
+            <span style="font-size:2.5rem; font-weight:700; color:#FF9800;">🔥</span>
+            <span style="font-size:2.2rem; font-weight:700; color:#fff;">Prévision Risque Incendie Californie</span>
         </div>
         """, unsafe_allow_html=True)
-    with col_humid:
-        st.markdown(f"""
-        <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
-            <div style="font-size:1.2rem; color:#2196F3;">💧 Humidité</div>
-            <div style="font-size:2rem; font-weight:bold;">{day_data.get('humidity', 'N/A')}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_wind:
-        st.markdown(f"""
-        <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
-            <div style="font-size:1.2rem; color:#4CAF50;">💨 Vent</div>
-            <div style="font-size:2rem; font-weight:bold;">{day_data.get('windspeed', 'N/A')} mph</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<h1 class="main-header">Système de Prévision du Risque d\'Incendie de Forêt</h1>', unsafe_allow_html=True)
 
-    # === 2. PRÉVISION SUR 7 JOURS ===
-    st.markdown('<h2 class="sub-header">📅 Prévisions sur 7 Jours</h2>', unsafe_allow_html=True)
-    forecast_days = min(7, len(weather_data.get('days', [])))
-    cols = st.columns(forecast_days)
-    for i in range(forecast_days):
-        day_data = weather_data['days'][i]
-        day_date = datetime.strptime(day_data['datetime'], '%Y-%m-%d').date()
+        # Récupérer les données météo
+        location = "california" if selected_county == "Tous les comtés" else selected_county.lower().replace(" ", "")
+        with st.spinner("Récupération des données météorologiques..."):
+            weather_data = get_weather_data(location)
+
+        if not weather_data:
+            st.error("Impossible de récupérer les données météorologiques. Veuillez réessayer plus tard.")
+            return
+
+        # Préparer les données pour les comtés
+        counties_data = pd.DataFrame({
+            'name': list(CALIFORNIA_COUNTIES.keys()) if selected_county == "Tous les comtés" else [selected_county]
+        })
+
+        # Calculer le risque d'incendie pour chaque comté
+        counties_data['fire_risk'] = 0
+        day_diff = (selected_date - today).days
+        day_data = weather_data['days'][min(day_diff, len(weather_data['days']) - 1)]
+
+        for idx, row in counties_data.iterrows():
+            county_name = row['name']
+            ndvi = get_ndvi_data(county_name)
+            elevation = get_elevation_data(county_name)
+            risk = calculate_fire_risk(day_data, ndvi, elevation)
+            counties_data.at[idx, 'fire_risk'] = risk
+
+        # === 1. INDICATEURS CLÉS ===
+        st.markdown('<h2 class="sub-header">🌡️ Indicateurs Clés</h2>', unsafe_allow_html=True)
+        col_temp, col_humid, col_wind = st.columns(3)
         temp_c = round((day_data['temp'] - 32) * 5 / 9, 1) if day_data.get('temp') not in [None, 'N/A'] else 'N/A'
-        icon = "☀️" if "clear" in day_data.get('icon', '').lower() else "🌧️" if "rain" in day_data.get('icon', '').lower() else "⛅"
-        if selected_county == "Tous les comtés":
-            day_risk = np.mean([calculate_fire_risk(day_data, get_ndvi_data(county), get_elevation_data(county))
-                                for county in CALIFORNIA_COUNTIES.keys()])
-        else:
-            day_risk = calculate_fire_risk(day_data, get_ndvi_data(selected_county), get_elevation_data(selected_county))
-        risk_class, color = get_risk_class(day_risk)
-        with cols[i]:
+        with col_temp:
             st.markdown(f"""
-            <div style="
-                background: #232a34;
-                border-radius: 18px;
-                padding: 18px 8px 14px 8px;
-                margin-bottom: 8px;
-                box-shadow: 0 2px 8px #0002;
-                text-align: center;
-                color: #fff;
-            ">
-                <div style="font-size:1.1rem; font-weight:600; margin-bottom:2px;">{day_date.strftime('%a %d %b')}</div>
-                <div style="font-size:2.2rem; font-weight:bold; margin-bottom:0;">{temp_c}°C</div>
-                <div style="font-size:2.5rem; margin-bottom:0;">{icon}</div>
-                <div style="font-size:1rem; color:#bbb; margin-bottom:4px;">{day_data.get('conditions', 'N/A')}</div>
-                <div style="font-size:0.95rem; margin-bottom:2px;">
-                    <span style="color:{color}; font-weight:600;">{risk_class}</span>
-                    <span style="color:{color}; font-weight:600;">({day_risk:.0f}/100)</span>
-                </div>
+            <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
+                <div style="font-size:1.2rem; color:#FF9800;">🌡️ Température</div>
+                <div style="font-size:2rem; font-weight:bold;">{temp_c}°C</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_humid:
+            st.markdown(f"""
+            <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
+                <div style="font-size:1.2rem; color:#2196F3;">💧 Humidité</div>
+                <div style="font-size:2rem; font-weight:bold;">{day_data.get('humidity', 'N/A')}%</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_wind:
+            st.markdown(f"""
+            <div style="background:#232a34; border-radius:10px; padding:12px; text-align:center;">
+                <div style="font-size:1.2rem; color:#4CAF50;">💨 Vent</div>
+                <div style="font-size:2rem; font-weight:bold;">{day_data.get('windspeed', 'N/A')} mph</div>
             </div>
             """, unsafe_allow_html=True)
 
-    # === 3. RISQUE INCENDIE ===
-    st.markdown('<h2 class="sub-header">🔥 Risque d\'Incendie</h2>', unsafe_allow_html=True)
-    if selected_county == "Tous les comtés":
-        avg_risk = counties_data['fire_risk'].mean()
-    else:
-        county_data = counties_data[counties_data['name'] == selected_county]
-        avg_risk = county_data['fire_risk'].values[0] if not county_data.empty else 50
-    risk_class, risk_color = get_risk_class(avg_risk)
-    st.markdown(f"""
-    <div class="card" style="margin-top:18px; border-left:5px solid {risk_color}; background:#232a34;">
-        <h3 style="margin:0; color:{risk_color};">Risque d'Incendie: {risk_class}</h3>
-        <p style="font-size:2rem; font-weight:bold; margin:5px 0; color:{risk_color};">{avg_risk:.1f}/100</p>
-        <p style="margin:0;">Pour {selected_county if selected_county != "Tous les comtés" else "la Californie"} le {selected_date.strftime('%d/%m/%Y')}</p>
-    </div>
-    """, unsafe_allow_html=True)
+        # === 2. PRÉDICTION SUR 7 JOURS ===
+        st.markdown('<h2 class="sub-header">📅 Prévisions sur 7 Jours</h2>', unsafe_allow_html=True)
+        forecast_days = min(7, len(weather_data.get('days', [])))
+        cols = st.columns(forecast_days)
+        for i in range(forecast_days):
+            day_data = weather_data['days'][i]
+            day_date = datetime.strptime(day_data['datetime'], '%Y-%m-%d').date()
+            temp_c = round((day_data['temp'] - 32) * 5 / 9, 1) if day_data.get('temp') not in [None, 'N/A'] else 'N/A'
+            icon = "☀️" if "clear" in day_data.get('icon', '').lower() else "🌧️" if "rain" in day_data.get('icon', '').lower() else "⛅"
+            if selected_county == "Tous les comtés":
+                day_risk = np.mean([calculate_fire_risk(day_data, get_ndvi_data(county), get_elevation_data(county))
+                                    for county in CALIFORNIA_COUNTIES.keys()])
+            else:
+                day_risk = calculate_fire_risk(day_data, get_ndvi_data(selected_county), get_elevation_data(selected_county))
+            risk_class, color = get_risk_class(day_risk)
+            with cols[i]:
+                st.markdown(f"""
+                <div style="
+                    background: #232a34;
+                    border-radius: 18px;
+                    padding: 18px 8px 14px 8px;
+                    margin-bottom: 8px;
+                    box-shadow: 0 2px 8px #0002;
+                    text-align: center;
+                    color: #fff;
+                ">
+                    <div style="font-size:1.1rem; font-weight:600; margin-bottom:2px;">{day_date.strftime('%a %d %b')}</div>
+                    <div style="font-size:2.2rem; font-weight:bold; margin-bottom:0;">{temp_c}°C</div>
+                    <div style="font-size:2.5rem; margin-bottom:0;">{icon}</div>
+                    <div style="font-size:1rem; color:#bbb; margin-bottom:4px;">{day_data.get('conditions', 'N/A')}</div>
+                    <div style="font-size:0.95rem; margin-bottom:2px;">
+                        <span style="color:{color}; font-weight:600;">{risk_class}</span>
+                        <span style="color:{color}; font-weight:600;">({day_risk:.0f}/100)</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-    # === 4. CARTE DES RISQUES EN BAS ===
-    st.markdown('<h2 class="sub-header">🗺️ Carte des Risques</h2>', unsafe_allow_html=True)
-    m = create_fire_risk_map(counties_data, selected_date)
-    folium_static(m, width=800, height=500)
+        # === 3. RISQUE INCENDIE ===
+        st.markdown('<h2 class="sub-header">🔥 Risque d\'Incendie</h2>', unsafe_allow_html=True)
+        if selected_county == "Tous les comtés":
+            avg_risk = counties_data['fire_risk'].mean()
+        else:
+            county_data = counties_data[counties_data['name'] == selected_county]
+            avg_risk = county_data['fire_risk'].values[0] if not county_data.empty else 50
+        risk_class, risk_color = get_risk_class(avg_risk)
+        st.markdown(f"""
+        <div class="card" style="margin-top:18px; border-left:5px solid {risk_color}; background:#232a34;">
+            <h3 style="margin:0; color:{risk_color};">Risque d'Incendie: {risk_class}</h3>
+            <p style="font-size:2rem; font-weight:bold; margin:5px 0; color:{risk_color};">{avg_risk:.1f}/100</p>
+            <p style="margin:0;">Pour {selected_county if selected_county != "Tous les comtés" else "la Californie"} le {selected_date.strftime('%d/%m/%Y')}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # === 5. GRAPHIQUES DES INDICATEURS ===
-    st.markdown('<h2 class="sub-header">📈 Graphiques des Indicateurs (7 jours)</h2>', unsafe_allow_html=True)
-    # Préparer les données pour les graphiques
-    dates = [datetime.strptime(day['datetime'], '%Y-%m-%d').strftime('%d/%m') for day in weather_data['days'][:7]]
-    temps = [day.get('temp', 0) for day in weather_data['days'][:7]]
-    humidities = [day.get('humidity', 0) for day in weather_data['days'][:7]]
-    winds = [day.get('windspeed', 0) for day in weather_data['days'][:7]]
+        # === 4. CARTE DES RISQUES EN BAS ===
+        st.markdown('<h2 class="sub-header">🗺️ Carte des Risques</h2>', unsafe_allow_html=True)
+        m = create_fire_risk_map(counties_data, selected_date)
+        folium_static(m, width=800, height=500)
 
-    # Conversion des températures en Celsius pour le graphique
-    temps_c = [round((t - 32) * 5 / 9, 1) for t in temps]
 
-    # Graphique de température en °C
-    fig_temp = px.line(
-        x=dates, y=temps_c, markers=True,
-        labels={"x": "Date", "y": "Température (°C)"},
-        title="Évolution de la Température"
-    )
-    fig_temp.update_traces(line_color="#FF5722")
-    st.plotly_chart(fig_temp, use_container_width=True)
 
-    # Graphique d'humidité
-    fig_hum = px.line(
-        x=dates, y=humidities, markers=True,
-        labels={"x": "Date", "y": "Humidité (%)"},
-        title="Évolution de l'Humidité"
-    )
-    fig_hum.update_traces(line_color="#2196F3")
-    st.plotly_chart(fig_hum, use_container_width=True)
+        # === 5. GRAPHIQUES DES INDICATEURS ===
+        st.markdown('<h2 class="sub-header">📈 Graphiques des Indicateurs (7 jours)</h2>', unsafe_allow_html=True)
+        # Préparer les données pour les graphiques
+        dates = [datetime.strptime(day['datetime'], '%Y-%m-%d').strftime('%d/%m') for day in weather_data['days'][:7]]
+        temps = [day.get('temp', 0) for day in weather_data['days'][:7]]
+        humidities = [day.get('humidity', 0) for day in weather_data['days'][:7]]
+        winds = [day.get('windspeed', 0) for day in weather_data['days'][:7]]
 
-    # Graphique de vent
-    fig_wind = px.line(
-        x=dates, y=winds, markers=True,
-        labels={"x": "Date", "y": "Vent (mph)"},
-        title="Évolution du Vent"
-    )
-    fig_wind.update_traces(line_color="#4CAF50")
-    st.plotly_chart(fig_wind, use_container_width=True)
+        # Conversion des températures en Celsius pour le graphique
+        temps_c = [round((t - 32) * 5 / 9, 1) for t in temps]
+
+        # Graphique de température en °C
+        fig_temp = px.line(
+            x=dates, y=temps_c, markers=True,
+            labels={"x": "Date", "y": "Température (°C)"},
+            title="Évolution de la Température"
+        )
+        fig_temp.update_traces(line_color="#FF5722")
+        st.plotly_chart(fig_temp, use_container_width=True)
+
+        # Graphique d'humidité
+        fig_hum = px.line(
+            x=dates, y=humidities, markers=True,
+            labels={"x": "Date", "y": "Humidité (%)"},
+            title="Évolution de l'Humidité"
+        )
+        fig_hum.update_traces(line_color="#2196F3")
+        st.plotly_chart(fig_hum, use_container_width=True)
+
+        # Graphique de vent
+        fig_wind = px.line(
+            x=dates, y=winds, markers=True,
+            labels={"x": "Date", "y": "Vent (mph)"},
+            title="Évolution du Vent"
+        )
+        fig_wind.update_traces(line_color="#4CAF50")
+        st.plotly_chart(fig_wind, use_container_width=True)
+
+
+    elif page == "Prédiction personnalisée":
+        st.markdown('<h1 class="main-header">Prédiction Personnalisée</h1>', unsafe_allow_html=True)
+        with st.expander("Entrer vos propres indicateurs pour une prédiction personnalisée", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                temp_input_c = st.number_input("Température (°C)", min_value=-10, max_value=50, value=24, key="custom_temp_c")
+                ndvi_input = st.slider("NDVI (Indice de Végétation)", min_value=0.0, max_value=1.0, value=0.5, key="custom_ndvi")
+            with col2:
+                humidity_input = st.number_input("Humidité (%)", min_value=0, max_value=100, value=50, key="custom_humidity")
+                elevation_input = st.number_input("Élévation (m)", min_value=0, max_value=4000, value=300, key="custom_elevation")
+            with col3:
+                wind_input = st.number_input("Vent (mph)", min_value=0, max_value=100, value=10, key="custom_wind")
+                precip_input = st.number_input("Précipitations (inches)", min_value=0.0, max_value=5.0, value=0.0, step=0.01, key="custom_precip")
+
+            if st.button("Prédire le risque d'incendie", key="predict_custom"):
+                st.session_state['show_custom_prediction'] = True
+
+            if st.session_state.get('show_custom_prediction', False):
+                # Conversion °C -> °F pour la formule
+                temp_input = temp_input_c * 9 / 5 + 32
+                custom_weather = {
+                    'temp': temp_input,
+                    'humidity': humidity_input,
+                    'windspeed': wind_input,
+                    'precip': precip_input
+                }
+                custom_risk = calculate_fire_risk(custom_weather, ndvi_input, elevation_input)
+                risk_class, risk_color = get_risk_class(custom_risk)
+                st.markdown(f"""
+                <div class="card" style="margin-top:10px; border-left:5px solid {risk_color}; background:#232a34;">
+                    <h3 style="margin:0; color:{risk_color};">Risque d'Incendie: {risk_class}</h3>
+                    <p style="font-size:2rem; font-weight:bold; margin:5px 0; color:{risk_color};">{custom_risk:.1f}/100</p>
+                    <p style="margin:0;">Température saisie : {temp_input_c}°C</p>
+                    <p style="margin:0;">Basé sur vos indicateurs personnalisés</p>
+                </div>
+                """, unsafe_allow_html=True)
 
 
 # Exécuter l'application
